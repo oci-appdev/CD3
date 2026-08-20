@@ -1,0 +1,116 @@
+# OCI CD3 backup configuration.
+# Install as /etc/cd3-backup/cd3-backup.conf with mode 0640 or stricter.
+
+# Private Object Storage bucket in the same OCI region as the CD3 instance.
+BACKUP_BUCKET="cd3-operational-backups"
+OBJECT_PREFIX="cd3"
+
+# Leave these empty when the script runs on the target OCI instance; IMDSv2 discovery fills them.
+OCI_REGION=""
+INSTANCE_OCID=""
+INSTANCE_COMPARTMENT_OCID=""
+AVAILABILITY_DOMAIN=""
+
+# Set explicitly if verification/restoration will run away from the original instance.
+INSTANCE_BACKUP_NAME=""
+
+# Instance principal is recommended. Set to an empty string only when intentionally using an OCI CLI profile.
+OCI_AUTH_MODE="instance_principal"
+USE_REALM_SPECIFIC_ENDPOINT=true
+
+# Run setup_cd3_volume_group.sh and paste the returned OCID here.
+VOLUME_GROUP_OCID=""
+VOLUME_BACKUP_POLICY_OCID=""
+ALLOW_INDIVIDUAL_VOLUME_BACKUPS=false
+
+BACKUP_MODE="full"
+BACKUP_TYPE="INCREMENTAL"
+BACKUP_CLASS="scheduled"
+RETENTION_DAYS=30
+BACKUP_WAIT_SECONDS=21600
+
+# Replace these examples with the real CD3 directories on your server.
+CD3_PATHS=(
+  "/home/opc/cd3_automation_toolkit"
+  "/home/opc/oci_tools"
+  "/opt/cd3"
+)
+REQUIRE_AT_LEAST_ONE_CD3_PATH=true
+
+# Terraform state and tfvars are intentionally retained. Private keys and caches are excluded.
+EXCLUDE_PATTERNS=(
+  "*/.oci/*"
+  "*/.ssh/*"
+  "*/.terraform/providers/*"
+  "*/.terraform/modules/*"
+  "*/__pycache__/*"
+  "*.pyc"
+  "*.pem"
+  "*.key"
+  "id_rsa*"
+  "id_ed25519*"
+)
+
+# Add every OCI Resource Manager stack that belongs to this CD3 environment.
+ORM_STACK_OCIDS=(
+  # "ocid1.ormstack.oc1..replace_me"
+)
+
+# Must NOT live under /tmp or /var/tmp: cd3-backup.service sets PrivateTmp=true,
+# which gives the unit a private /tmp and /var/tmp. A lock file there would not
+# be shared with a manual run, so two backups could execute at once.
+WORK_ROOT="/var/lib/cd3-backup"
+LOCK_FILE="/var/lib/cd3-backup/cd3-backup.lock"
+KEEP_LOCAL_COPY=false
+
+# Leave defined tags empty until the namespace and keys have been validated in this tenancy.
+# This avoids the Invalid tags error previously seen during CD3 deployment.
+DEFINED_TAGS_JSON=""
+FREEFORM_TAGS_JSON='{"ManagedBy":"CD3Backup","Compliance":"SCCA"}'
+
+# Retention period sent to OCI with each volume backup.
+# Oracle documents the retentionPeriod complex type as retentionTimeAmount /
+# retentionTimeUnit, which is what the script builds from RETENTION_DAYS.
+# Override only if your OCI CLI expects a different shape. Confirm with:
+#   oci bv volume-group-backup create --generate-param-json-input retention-period
+# The dry run prints both the value it will send and the shape your CLI expects.
+RETENTION_PERIOD_JSON=""
+APPLY_RETENTION_PERIOD=true
+
+# ---------------------------------------------------------------------------
+# Email alerting through OCI Notifications
+# ---------------------------------------------------------------------------
+# Create the topic and subscribe your addresses with:
+#   setup_cd3_notifications.sh --email cloudops@example.gov --execute
+# then paste the topic OCID it prints here. Every new email subscription is
+# PENDING until the recipient clicks the confirmation link OCI sends them.
+# Prove delivery works before you rely on it:
+#   backup_cd3_instance.sh --config <this file> --test-notification
+ONS_TOPIC_OCID=""
+
+# Email on a clean run as well as a failed one. Set to false once the daily
+# success mail becomes noise and you only want to hear about problems - but
+# see the note on missed runs in Step 13 of the guide before you do.
+NOTIFY_ON_SUCCESS=true
+NOTIFY_ON_FAILURE=true
+
+# Also email the result of verify_cd3_backup.sh.
+NOTIFY_ON_VERIFY=true
+
+# A dry run stays silent by default. Set true if you schedule --dry-run as a
+# preflight and want to hear when the preflight itself fails.
+NOTIFY_ON_DRY_RUN=false
+
+# Subject line: "<prefix> <environment> SUCCESS - <instance> - <class>".
+# Keep the prefix stable so recipients can filter on it.
+NOTIFY_SUBJECT_PREFIX="[CD3 Backup]"
+NOTIFY_ENVIRONMENT=""
+
+# Refuse to run a backup at all when the notification topic is unusable, on the
+# grounds that an unmonitored backup is worse than an obvious failure. Leave
+# false unless your control set requires alerting to be proven on every run.
+REQUIRE_NOTIFICATION_TOPIC=false
+
+# Backup refuses to run when commands matching this expression are active.
+ACTIVE_PROCESS_PATTERN='terraform.*(apply|destroy|import)|cd3.*(apply|destroy)'
+

@@ -1,0 +1,60 @@
+OCI CD3 BACKUP — DYNAMIC GROUP AND IAM POLICY TEMPLATE
+
+Replace every value inside angle brackets before creating the dynamic group or policy.
+Create IAM resources in the tenancy home region.
+
+1. Dynamic group name
+
+CD3-Backup-Instances
+
+2. Recommended exact-instance matching rule
+
+ALL {instance.id = '<CD3_INSTANCE_OCID>'}
+
+3. Policy statements
+
+Allow dynamic-group CD3-Backup-Instances to read instance-family in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to inspect volume-attachments in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to use volumes in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to inspect volume-groups in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to manage volume-groups in compartment <CD3_COMPARTMENT_NAME> where request.permission = 'VOLUME_GROUP_CREATE'
+Allow dynamic-group CD3-Backup-Instances to inspect volume-backups in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to manage volume-backups in compartment <CD3_COMPARTMENT_NAME> where request.permission = 'VOLUME_BACKUP_CREATE'
+Allow dynamic-group CD3-Backup-Instances to inspect boot-volume-backups in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to manage boot-volume-backups in compartment <CD3_COMPARTMENT_NAME> where request.permission = 'BOOT_VOLUME_BACKUP_CREATE'
+Allow dynamic-group CD3-Backup-Instances to inspect volume-group-backups in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to manage volume-group-backups in compartment <CD3_COMPARTMENT_NAME> where request.permission = 'VOLUME_GROUP_BACKUP_CREATE'
+Allow dynamic-group CD3-Backup-Instances to inspect vnic-attachments in compartment <CD3_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to read vnics in compartment <NETWORK_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to read subnets in compartment <NETWORK_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to read buckets in compartment <BACKUP_COMPARTMENT_NAME> where target.bucket.name = '<BACKUP_BUCKET_NAME>'
+Allow dynamic-group CD3-Backup-Instances to manage objects in compartment <BACKUP_COMPARTMENT_NAME> where target.bucket.name = '<BACKUP_BUCKET_NAME>'
+Allow dynamic-group CD3-Backup-Instances to read orm-stacks in compartment <ORM_STACK_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to read orm-jobs in compartment <ORM_STACK_COMPARTMENT_NAME>
+
+4. Notifications policy (required for email alerting)
+
+Allow dynamic-group CD3-Backup-Instances to use ons-topics in compartment <NOTIFICATIONS_COMPARTMENT_NAME>
+
+The "use" verb on ons-topics grants ONS_TOPIC_PUBLISH and ONS_TOPIC_READ, which
+is what the backup instance needs: it publishes run results and reads the topic
+once at startup to confirm the configured OCID is valid. It does not permit
+creating or deleting topics.
+
+If you also want setup_cd3_notifications.sh to create the topic from the
+instance rather than creating it by hand in the Console, add:
+
+Allow dynamic-group CD3-Backup-Instances to manage ons-topics in compartment <NOTIFICATIONS_COMPARTMENT_NAME>
+Allow dynamic-group CD3-Backup-Instances to manage ons-subscriptions in compartment <NOTIFICATIONS_COMPARTMENT_NAME>
+
+Prefer creating the topic and subscriptions in the Console and granting only
+"use", so the backup principal cannot alter who gets alerted.
+
+5. Notes
+
+- If CD3, networking, backups, and Resource Manager stacks use different compartments, keep the separate compartment scopes shown above.
+- The object policy is restricted to the named backup bucket.
+- The backup script never deletes volumes, instances, Resource Manager stacks, Object Storage objects, or notification topics.
+- If your security team does not allow permission-filtered statements, use the broader individual resource-type policies only after formal approval.
+- Customer-managed Vault encryption keys require additional key-use permissions for the instance principal and the relevant OCI service principal.
+

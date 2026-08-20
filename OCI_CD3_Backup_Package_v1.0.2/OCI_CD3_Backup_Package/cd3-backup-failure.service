@@ -1,0 +1,21 @@
+[Unit]
+Description=Report a failed OCI CD3 backup to OCI Notifications
+Documentation=file:/opt/cd3-backup/OCI_CD3_Backup_Step_by_Step.md
+# Backstop for failures the backup script cannot report itself: killed on
+# TimeoutStartSec, OOM, host reboot mid-run, or the script failing to start.
+ConditionPathExists=/etc/cd3-backup/cd3-backup.conf
+
+[Service]
+Type=oneshot
+User=opc
+Group=opc
+UMask=0077
+ExecStart=/opt/cd3-backup/cd3-backup-notify.sh --config /etc/cd3-backup/cd3-backup.conf --state failed --unit cd3-backup.service
+TimeoutStartSec=2m
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cd3-backup-notify

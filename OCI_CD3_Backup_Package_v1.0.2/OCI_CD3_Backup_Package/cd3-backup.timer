@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the OCI CD3 backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+Persistent=true
+RandomizedDelaySec=15m
+Unit=cd3-backup.service
+
+[Install]
+WantedBy=timers.target
+
