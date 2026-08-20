@@ -1,0 +1,31 @@
+[Unit]
+Description=OCI CD3 instance and configuration backup
+Documentation=file:/opt/cd3-backup/OCI_CD3_Backup_Step_by_Step.md
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/cd3-backup/cd3-backup.conf
+
+[Service]
+Type=oneshot
+User=opc
+Group=opc
+UMask=0077
+ExecStart=/opt/cd3-backup/backup_cd3_instance.sh --config /etc/cd3-backup/cd3-backup.conf --mode full
+TimeoutStartSec=8h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# StateDirectory creates and owns /var/lib/cd3-backup for User=/Group=.
+# The work root must stay off /var/tmp, which PrivateTmp= makes private
+# to this unit and therefore invisible to an operator running a manual
+# backup - the flock guard would not be shared between the two.
+StateDirectory=cd3-backup
+StateDirectoryMode=0700
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cd3-backup
+
