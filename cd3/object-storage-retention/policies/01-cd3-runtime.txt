@@ -1,0 +1,8 @@
+# Append these three statements to an EXISTING root-attached automation policy.
+# Replace every <PLACEHOLDER> locally. Copy only Allow lines into CD3 Policies.
+# The executor is the identity running Terraform, not necessarily the CD3 VM.
+# These grants do NOT restrict permissions granted by other policies.
+# Namespace read supports CD3's GetNamespace call with tenancy compartment_id.
+Allow dynamic-group id <CD3_EXECUTOR_DYNAMIC_GROUP_OCID> to read objectstorage-namespaces in tenancy
+Allow dynamic-group id <CD3_EXECUTOR_DYNAMIC_GROUP_OCID> to inspect buckets in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow dynamic-group id <CD3_EXECUTOR_DYNAMIC_GROUP_OCID> to manage buckets in compartment id <LOGGING_COMPARTMENT_OCID> where all {target.bucket.name='<EVIDENCE_BUCKET_NAME>', any {request.permission='BUCKET_READ', request.permission='BUCKET_UPDATE', request.permission='RETENTION_RULE_MANAGE'}}

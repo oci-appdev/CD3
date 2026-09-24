@@ -1,0 +1,4 @@
+# OPTIONAL: add only if CD3 must CREATE the named bucket.
+# Existing bucket retention changes do not require BUCKET_CREATE.
+# Does not grant bucket deletion, object access, or retention locking.
+Allow dynamic-group id <CD3_EXECUTOR_DYNAMIC_GROUP_OCID> to manage buckets in compartment id <LOGGING_COMPARTMENT_OCID> where all {target.bucket.name='<EVIDENCE_BUCKET_NAME>', request.permission='BUCKET_CREATE'}

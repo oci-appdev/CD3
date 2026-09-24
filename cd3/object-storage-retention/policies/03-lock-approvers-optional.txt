@@ -1,0 +1,9 @@
+# OPTIONAL: a SEPARATE privileged approval phase, not normal CD3 runtime.
+# Append to an EXISTING root-attached security policy after approval.
+# Select the existing approved human group, such as Default/VDSS-Security-Admins,
+# by its OCID. Do not grant this to the normal automation dynamic group.
+# The grant also permits unlocked-rule administration; it is not lock-only.
+# Scheduling a lock is an irreversible commitment once its delay expires.
+Allow group id <RETENTION_LOCK_APPROVERS_GROUP_OCID> to read objectstorage-namespaces in tenancy
+Allow group id <RETENTION_LOCK_APPROVERS_GROUP_OCID> to inspect buckets in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <RETENTION_LOCK_APPROVERS_GROUP_OCID> to manage buckets in compartment id <LOGGING_COMPARTMENT_OCID> where all {target.bucket.name='<EVIDENCE_BUCKET_NAME>', any {request.permission='BUCKET_READ', request.permission='BUCKET_UPDATE', request.permission='RETENTION_RULE_MANAGE', request.permission='RETENTION_RULE_LOCK'}}

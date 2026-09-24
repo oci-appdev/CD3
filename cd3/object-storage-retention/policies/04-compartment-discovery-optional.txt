@@ -1,0 +1,5 @@
+# OPTIONAL: use only if the CD3 generation/export identity needs compartment
+# lookup and does not already have it. This is not a retention API requirement.
+# Replace the subject if generation and Terraform use different identities.
+# Append to an EXISTING root-attached policy. This reveals compartment metadata.
+Allow dynamic-group id <CD3_EXECUTOR_DYNAMIC_GROUP_OCID> to inspect compartments in tenancy
