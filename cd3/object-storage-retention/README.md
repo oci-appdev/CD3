@@ -45,6 +45,205 @@ review and narrow the covering grants through a separate IAM change. An executor
 that can rewrite IAM policies can grant itself more access. Do not remove the
 existing broad permissions blindly; other deployments may rely on them. [3]
 
+## Dedicated logging compartment — complete setup procedure
+
+Added 9 November 2026. This procedure fills the missing setup before the retention steps below. It is a runbook, not evidence of a completed OCI deployment. Console wording can vary by release; use Console search for the named service when navigation differs.
+
+### 1. Confirm the destination and record inputs
+
+Use the existing Default identity domain and existing ADFS/YubiKey access. No new identity domain, VCN, subnet, or VM is required just to create this compartment.
+
+| Item | Planned value / required action |
+| --- | --- |
+| Compartment hierarchy | Tenancy → EBLZ → VDMS → Logging |
+| Regional logging and bucket location | us-langley-1; confirm subscribed Government Cloud region |
+| IAM changes | Use the actual tenancy home region |
+| Evidence bucket | eblz-security-evidence-worm; confirm name availability |
+| Searchable logs | Proposed 90 days; confirm approved retention and supported setting |
+| Object retention | Proposed seven years; obtain the actual records requirement |
+| Owner | Existing VDMS platform/logging administrators |
+| Evidence readers | Existing Security-Auditors group |
+| Lock authority | Separately approved security group |
+
+Before creation, search Compartments for Logging and inspect its parent and OCID. The older workbook uses EBLZ::Logging. Do not treat it as the same compartment as EBLZ::VDMS::Logging, delete it, or move its resources as part of this setup. If an existing operational logging destination is to be retained, substitute that confirmed compartment everywhere below and record the decision. A migration requires its own resource inventory and plan.
+
+Record locally: EBLZ OCID, VDMS OCID, Logging OCID when created, operator group OCID, auditor group OCID, source compartment/log OCIDs, and approved alert recipients. Keep production identifiers and evidence out of this public repository.
+
+### 2. Create the Logging compartment in the Console
+
+Use an existing IAM administrator authorized to create compartments beneath VDMS.
+
+1. Sign in to the Government Cloud Console using the existing federated account.
+2. Open **Identity & Security → Compartments** (or search for Compartments).
+3. Open EBLZ. Verify its OCID against the recorded landing-zone parent.
+4. Open its VDMS child. Verify the parent is EBLZ.
+5. Select **Create compartment**.
+6. Enter name **Logging**.
+7. Enter description: **Central log groups, log delivery connectors, and retained security evidence for the EBLZ landing zone**.
+8. Set **Parent compartment = VDMS**. Check the hierarchy, not only the display name.
+9. Apply only existing, approved defined tags. Confirm their namespaces and keys exist first; an invented tag can cause the Invalid tags error seen previously. Meet any required tag defaults.
+10. Select **Create compartment**.
+11. Wait for **Active**, open Logging, and copy its OCID into the restricted implementation record.
+12. Verify the breadcrumb is **EBLZ → VDMS → Logging**.
+
+Success: one Active Logging child beneath VDMS. An empty compartment does not collect logs automatically and cannot itself be retention-locked.
+
+### 3. Alternative: create the compartment through CD3
+
+Use either step 2 or this step to create it, not both. If step 2 was used, reconcile/import the existing resource into the intended Terraform state before managing it through CD3.
+
+1. Back up the authoritative workbook and state.
+2. Open the **Compartments** worksheet. Read its header instructions for the installed CD3 version.
+3. Confirm EBLZ and VDMS are already represented with their existing mappings.
+4. Insert a row before **<END>** for **Logging**, with parent **EBLZ::VDMS**, using the sheet's compartment-name and parent-compartment columns.
+5. Use the installed CD3 alias for the actual IAM home region. Do not copy Ashburn from the old workbook without checking the region mapping.
+6. Supply the same description as step 2 and only valid existing tags.
+7. Run the established CD3 entry command and choose **Identity → Add/Modify/Delete Compartments**.
+8. Review generated Terraform: Logging's parent compartment ID must resolve to VDMS, not tenancy root or EBLZ.
+9. Run Terraform validation and a saved plan, or the equivalent Resource Manager Plan job.
+10. Confirm the plan creates only the intended missing compartment and does not rename, replace, or remove existing compartments.
+11. Apply the reviewed plan with the established deployment identity.
+12. Read back the new compartment OCID and parent; record them.
+
+Do not edit an old EBLZ::Logging row to repurpose an existing compartment without a separate move/state review. Keep one state owner per resource.
+
+### 4. Add logging operator and reader permissions
+
+Use an existing IAM policy at Logging or an ancestor that can govern it. Given the reported IAM policy-object limit, append statements to an existing appropriate policy rather than creating a new object. Preserve all existing statements.
+
+Replace placeholders below. Use group OCIDs to avoid identity-domain name ambiguity:
+
+```text
+Allow group id <LOGGING_OPERATORS_GROUP_OCID> to manage log-groups in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <LOGGING_OPERATORS_GROUP_OCID> to read log-content in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <LOGGING_OPERATORS_GROUP_OCID> to manage serviceconnectors in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <AUDITORS_GROUP_OCID> to read log-groups in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <AUDITORS_GROUP_OCID> to read log-content in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <AUDITORS_GROUP_OCID> to read buckets in compartment id <LOGGING_COMPARTMENT_OCID>
+Allow group id <AUDITORS_GROUP_OCID> to read objects in compartment id <LOGGING_COMPARTMENT_OCID> where target.bucket.name='eblz-security-evidence-worm'
+```
+
+These are scoped supplements. Resource owners still need their service-specific permissions to enable logging on source resources. Connector-source access and bucket administration are configured separately below. Existing compartment discovery, tag namespace use, and deployment-state permissions remain prerequisites.
+
+For CD3, add each full statement as one continuation row in the existing Policies block, as explained in retention step 4 below. Generate and review the policy diff before apply. Verify the operator can open Logging and create a log group; verify auditors can read but have no unintended write grants. IAM permissions are additive: a narrow new statement does not cancel broad inherited access.
+
+### 5. Create central log groups
+
+In the region selector choose **us-langley-1**.
+
+1. Open **Observability & Management → Logging → Log Groups**.
+2. Select **EBLZ → VDMS → Logging** in the compartment picker.
+3. Select **Create log group**.
+4. Name it **eblz-network-security**; describe its purpose as network and security service logs.
+5. Apply approved tags and create it.
+6. Repeat for **eblz-platform** and **eblz-log-delivery**.
+7. Open each group and record its OCID and compartment.
+
+Use network-security for supported network/firewall/WAF logs, platform for other approved service/custom logs, and log-delivery for connector diagnostics where available. Log groups organize logs; choose searchable retention on each log. Audit is collected by OCI separately: do not create a custom group named _Audit expecting to enable Audit collection.
+
+### 6. Enable each required source log
+
+Create a source inventory before enabling anything:
+
+| Source resource | Source compartment | Region | Log category | Destination log group | Enabled / event verified |
+| --- | --- | --- | --- | --- | --- |
+| Approved subnet or VNIC | Record actual | Record actual | Supported flow-log category | eblz-network-security | Pending |
+| Existing firewall / WAF | Record actual | Record actual | Categories offered by the service | eblz-network-security | Pending |
+| Existing platform service | Record actual | Record actual | Supported service category | eblz-platform | Pending |
+| Audit | Every required compartment, including root where needed | Record actual | _Audit source | Selected separately by connector | Pending |
+
+For each service resource:
+1. Open **Logging → Logs → Enable service log**.
+2. Select the compartment holding the source resource, its service, resource, and offered log category.
+3. Set the log destination compartment to Logging and choose the intended central log group where supported.
+4. Give the log a descriptive name containing service/resource/category.
+5. Set approved searchable retention, for example 90 days if supported, and enable it.
+6. Wait for Active, generate one harmless representative event (for example an approved connection), and use **Explore log/Search** to verify a recent timestamp and expected resource identity.
+7. Repeat for each required category and resource; enabling one log does not enable every log in a VCN or tenancy.
+
+If a service requires its log to stay with the source compartment, keep it there and select it as a connector source. Check Government Cloud availability for each category; do not deploy a new firewall or WAF merely to populate this inventory. Guest OS logs require a separate supported agent/custom-log setup; service-log enablement does not collect VM files automatically.
+
+### 7. Create the private evidence bucket
+
+1. Open **Storage → Buckets**, select us-langley-1 and the new Logging compartment.
+2. Select **Create bucket**.
+3. Enter **eblz-security-evidence-worm** (or the approved unique name).
+4. Select **Standard**, private visibility, and versioning disabled for this new bucket.
+5. Use the approved encryption setting. If using a customer-managed Vault key, verify service access and key lifecycle before proceeding.
+6. Leave replication and retention lock unconfigured for initial delivery testing. Do not create public access or pre-authenticated requests.
+7. Create the bucket and verify its compartment OCID, region, visibility, and versioning.
+8. Record its namespace and name.
+
+An authorized storage administrator creates this bucket, or use the CD3 bucket procedure below and optional creation template. Do not use the Terraform-state bucket for evidence.
+
+### 8. Configure Connector Hub delivery
+
+1. Open **Connector Hub → Connectors**, select Logging, and create a connector named **eblz-security-logs-to-evidence**.
+2. Set source **Logging**, target **Object Storage**, and no processing task for this initial setup.
+3. Select every approved source log from step 6. Add the required Audit sources separately; explicitly verify compartment coverage instead of assuming a parent selection recursively includes all children.
+4. Select the evidence bucket in Logging as the target. Use the Console's supported default batching settings initially and record them.
+5. Review the source and target authorization statements offered by the connector wizard. Have the IAM administrator append the required statements to an existing suitable policy; do not automatically create extra policy objects.
+6. Scope source access to the chosen source compartments/logs and target writes to the evidence bucket and intended connector identity. Human operator permissions alone do not authorize the connector.
+7. Reopen/review the wizard after policy propagation and create/activate the connector.
+8. Enable connector diagnostics into eblz-log-delivery if offered in this Government Cloud region.
+
+Keep this connector's diagnostic log out of its own source selection to avoid feedback. For exact generated service-principal authorization, use the wizard's current statements for this configuration instead of guessing a dynamic-group rule. Copy them into the authoritative CD3 policy source after validation.
+
+### 9. Prove end-to-end collection before retention
+
+1. Record a UTC start time and generate an approved identifiable test event.
+2. Find that event in Logging Search.
+3. Check connector state and metrics/diagnostics for successful processing.
+4. After the configured batch interval and delivery processing, list the evidence bucket.
+5. Download a newly delivered object with the auditor identity.
+6. Decompress if necessary and locate the test event, timestamp, and source identifier.
+7. Repeat for Audit and each distinct source category; a single delivered file does not prove complete coverage.
+8. Record source-to-object evidence in the restricted change record.
+
+Connector Hub does not provide a general historical backfill merely by creating a connector. Its Logging source delivery window is limited; resolve failures promptly and separately account for historical gaps. See Oracle's delivery documentation below.
+
+### 10. Enable retention, lifecycle, and operational monitoring
+
+1. Continue with retention steps 1–8 below: apply the approved time-bound rule **without a lock**, using the same state owner.
+2. Test overwrite/delete protection only on disposable test objects with an identity otherwise allowed those actions; verify production delivery continues.
+3. If approved, configure a bucket lifecycle transition to Archive after 90 days. Verify required lifecycle service authorization. Test restoring archived evidence before relying on it.
+4. Configure monitoring for connector failures and missing expected delivery; choose thresholds using the actual batch interval and normal source frequency. A quiet source alone is not proof of failure.
+5. Create/use the approved Notifications topic, subscribe the operational mailbox, and confirm the subscription. Verify receipt with an approved test notification.
+6. Only after acceptance, follow retention step 9 to schedule permanent locking with at least the mandatory 14-day delay. Record the approver and review dates.
+7. Reconcile all Console-created resources with the authoritative CD3/Terraform configuration before the next automated apply.
+
+The lock applies to the bucket retention rule, not Logging or the compartment. Archive transitions are compatible with retention; deletion remains blocked while objects are protected. A permanent lock cannot be undone.
+
+### 11. Completion and troubleshooting
+
+| Check | Required evidence |
+| --- | --- |
+| Compartment | Active; parent OCID is VDMS |
+| IAM | Operator and auditor checks; broad inherited grants reviewed |
+| Log coverage | Every inventory row has a verified recent event or documented exception |
+| Delivery | Representative events found inside delivered objects |
+| Retention | Correct duration; lock absent initially |
+| Monitoring | Confirmed recipient and successful test notification |
+| CD3 ownership | Workbook/configuration and owning state reconciled |
+
+- **Logging missing from picker:** check region, permissions, compartment parent and propagation.
+- **Invalid tags:** verify namespace, key, allowed value and tag permissions.
+- **No source events:** check source resource/category, enablement, time range and log location.
+- **Source events but no objects:** check connector authorization, target namespace/bucket, batching and failure diagnostics.
+- **Quota blocks setup:** inspect the exact service quota; do not disable unrelated SCCA guardrails.
+- **Duplicate resources in plan:** stop and reconcile existing resource imports/state before applying.
+- **Rollback before lock:** disable only the newly introduced failing connector/log configuration as appropriate; preserve collected evidence and repair forward. Do not delete a populated compartment as rollback.
+- **After permanent lock:** reverting Git cannot remove protected retention.
+
+### Setup references
+
+- [Create a log group](https://docs.oracle.com/en-us/iaas/Content/Logging/Task/create-logging-log-group.htm)
+- [Enable resource logging](https://docs.oracle.com/en-us/iaas/Content/Logging/Task/enabling_logging.htm)
+- [Create a Logging-source connector and understand its delivery window](https://docs.oracle.com/en-us/iaas/Content/connector-hub/create-service-connector-logging-source.htm)
+- [Retention behavior and restrictions](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/usingretentionrules.htm)
+
+---
+
 ## Step 1 — Record the actual target and executor
 
 Complete these values locally. Do not commit populated identifiers, credentials,
